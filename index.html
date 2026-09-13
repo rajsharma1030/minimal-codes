@@ -3073,14 +3073,43 @@
   overlay.addEventListener('click', function(e){ if(e.target === overlay) closeModal(); });
   document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeModal(); });
 
-  // Forms (no backend wired up yet — swap this for a real endpoint before launch)
+  // Forms — submissions are sent to a Google Sheet via an Apps Script Web App
+  var LEAD_ENDPOINT = 'https://script.google.com/macros/s/AKfycby4Qr_qJqoo5CPoc0zQhPilwVB2zBgdD_f86T2LqAnW04ZkIZSHNf80b7zkV9Dl5VE6MQ/exec';
   function wireForm(formId, fieldsId, successId){
     var form = document.getElementById(formId);
     if(!form) return;
     form.addEventListener('submit', function(e){
       e.preventDefault();
-      document.getElementById(fieldsId).classList.add('hide');
-      document.getElementById(successId).classList.add('show');
+      var submitBtn = form.querySelector('button[type="submit"]');
+      var originalLabel = submitBtn ? submitBtn.textContent : '';
+      if(submitBtn){ submitBtn.disabled = true; submitBtn.textContent = 'Sending...'; }
+
+      var data = new FormData(form);
+      var payload = {
+        name: data.get('name') || '',
+        email: data.get('email') || '',
+        service: data.get('service') || '',
+        message: data.get('message') || '',
+        source: formId
+      };
+
+      function showSuccess(){
+        document.getElementById(fieldsId).classList.add('hide');
+        document.getElementById(successId).classList.add('show');
+        if(submitBtn){ submitBtn.disabled = false; submitBtn.textContent = originalLabel; }
+      }
+
+      if(!LEAD_ENDPOINT){ showSuccess(); return; }
+
+      // Apps Script Web Apps don't return CORS headers, so the response body
+      // isn't readable from the browser — 'no-cors' still delivers the POST,
+      // we just can't inspect the result and optimistically show success.
+      fetch(LEAD_ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      }).then(showSuccess).catch(showSuccess);
     });
   }
   wireForm('hero-form', 'hero-form-fields', 'hero-form-success');
